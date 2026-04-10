@@ -1,0 +1,1877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weir — Mining Operations</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0b1533;
+    --bg-light: #101d42;
+    --accent: #4a8fff;
+    --accent-dim: #2a5a9a;
+    --text: #e8ecf4;
+    --text-dim: #7a8aaa;
+    --road: #1a2a52;
+    --terrain-base: #0d1a3d;
+    --terrain-light: #112248;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, sans-serif;
+    overflow-x: hidden;
+    cursor: default;
+  }
+
+  .fixed-ui {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 1000;
+    padding: 28px 36px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+  }
+
+  .logo {
+    pointer-events: auto;
+    width: 100px;
+    opacity: 0.95;
+  }
+  .logo svg { width: 100%; height: auto; }
+
+  .menu-btn {
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    cursor: pointer;
+    padding: 8px;
+    transition: opacity 0.3s;
+  }
+  .menu-btn:hover { opacity: 0.7; }
+  .menu-btn span {
+    display: block;
+    width: 24px;
+    height: 1.5px;
+    background: var(--text);
+    border-radius: 1px;
+  }
+
+  #scene-container {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1;
+  }
+
+  .scroll-spacer {
+    position: relative;
+    z-index: 0;
+    height: 450vh;
+  }
+
+  .zone-text {
+    position: fixed;
+    left: 36px;
+    bottom: 80px;
+    z-index: 100;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 1.4s cubic-bezier(0.25, 0.1, 0.25, 1), transform 1.4s cubic-bezier(0.25, 0.1, 0.25, 1);
+    transform: translateY(30px);
+    max-width: 340px;
+  }
+
+  .zone-text.active {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .zone-text .zone-title {
+    transition: opacity 1.6s cubic-bezier(0.25, 0.1, 0.25, 1) 0.1s, transform 1.6s cubic-bezier(0.25, 0.1, 0.25, 1) 0.1s;
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  .zone-text.active .zone-title {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .zone-text .zone-desc {
+    transition: opacity 1.8s cubic-bezier(0.25, 0.1, 0.25, 1) 0.25s, transform 1.8s cubic-bezier(0.25, 0.1, 0.25, 1) 0.25s;
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  .zone-text.active .zone-desc {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .zone-label-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 8px;
+  }
+
+  .zone-icon {
+    width: 36px;
+    height: 36px;
+    border: 1.5px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .zone-icon svg { width: 18px; height: 18px; fill: none; stroke: var(--text-dim); stroke-width: 1.5; }
+
+  .zone-divider {
+    width: 1.5px;
+    height: 36px;
+    background: rgba(255,255,255,0.12);
+  }
+
+  .zone-title {
+    font-size: 36px;
+    font-weight: 400;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+
+
+  .zone-desc {
+    font-size: 14px;
+    font-weight: 300;
+    line-height: 1.7;
+    color: var(--text-dim);
+    max-width: 280px;
+  }
+  .zone-text.payload-active .zone-icon,
+  .zone-text.payload-active .zone-divider {
+    display: none;
+  }
+  .zone-text.payload-active .zone-title {
+    font-size: 34px;
+  }
+
+  .hotspot {
+    position: fixed;
+    z-index: 200;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+  }
+  .hotspot.visible { opacity: 0.5; }
+  .hotspot.primary.visible { opacity: 1; }
+
+  .hotspot-dot {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+  }
+  .hotspot-dot svg {
+    width: 12px;
+    height: 12px;
+    fill: none;
+    stroke: rgba(255,255,255,0.50);
+    stroke-width: 1.5;
+  }
+
+  .hotspot.primary .hotspot-dot {
+    background: transparent;
+    border-color: rgba(255,255,255,0.7);
+  }
+  .hotspot.primary .hotspot-dot svg { stroke: #fff; stroke-width: 1.5; }
+
+  .hotspot.active svg {
+    transform: rotate(45deg);
+    transition: transform 0.3s ease;
+  }
+
+  .hotspot:hover .hotspot-dot {
+    border-color: rgba(255,255,255,0.4);
+    transform: scale(1.06);
+  }
+  .hotspot.primary:hover .hotspot-dot {
+    border-color: #fff;
+  }
+
+  .hotspot-label {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    background: rgba(14,24,48,0.85);
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.08);
+    white-space: nowrap;
+    opacity: 0;
+    overflow: hidden;
+    transform: translateX(-10px);
+    transform-origin: left center;
+    clip-path: inset(0 100% 0 0);
+    transition: opacity 0.28s ease, transform 0.28s ease, clip-path 0.28s ease;
+    pointer-events: none;
+    backdrop-filter: blur(10px);
+  }
+  #hs-payload:hover .hotspot-label {
+    opacity: 1;
+    transform: translateX(0);
+    clip-path: inset(0 0 0 0);
+  }
+
+
+  .scroll-indicator {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    opacity: 0.5;
+    transition: opacity 0.6s;
+    pointer-events: none;
+  }
+  .scroll-indicator.hidden { opacity: 0; }
+  .scroll-indicator span {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .scroll-arrow {
+    width: 12px;
+    height: 12px;
+    border-right: 1.5px solid var(--text-dim);
+    border-bottom: 1.5px solid var(--text-dim);
+    transform: rotate(45deg);
+    animation: scrollBounce 2s infinite;
+  }
+  @keyframes scrollBounce {
+    0%, 100% { transform: rotate(45deg) translateY(0); }
+    50% { transform: rotate(45deg) translateY(4px); }
+  }
+
+  .progress-dots {
+    position: fixed;
+    right: 36px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    pointer-events: auto;
+  }
+  .progress-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    transition: all 0.4s ease;
+    cursor: pointer;
+  }
+  .progress-dot.active {
+    background: rgba(255,255,255,0.7);
+    transform: scale(1.4);
+  }
+
+  .dot-grid {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.6) 0.7px, transparent 0.7px);
+    background-size: 28px 28px;
+  }
+
+  .payload-overlay {
+    position: fixed;
+    z-index: 250;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+  }
+  .payload-overlay.visible {
+    opacity: 1;
+  }
+  .payload-overlay-inner {
+    background: rgba(14,24,48,0.88);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    padding: 14px 18px;
+    backdrop-filter: blur(12px);
+    min-width: 180px;
+  }
+  .payload-overlay-title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+  .payload-metric {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .payload-metric-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-weight: 400;
+  }
+  .payload-metric-value {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .payload-bar-track {
+    width: 100%;
+    height: 3px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 4px;
+    margin-bottom: 6px;
+  }
+  .payload-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+    width: 0%;
+  }
+  .payload-pass-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-weight: 400;
+    opacity: 0.7;
+  }
+  .payload-status-dot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #4adf8a;
+    margin-right: 6px;
+    vertical-align: middle;
+    animation: statusPulse 2s infinite;
+  }
+  @keyframes statusPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+</style>
+</head>
+<body>
+
+<div class="dot-grid"></div>
+
+<div class="fixed-ui">
+  <div class="logo">
+    <svg id="Layer_2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 332.36 103.69">
+      <g id="full_colour">
+        <path fill="#fff" d="M298.33,37.5h-9.26v-12.97h9.26v12.97ZM332.36,62.5c0-5.89-3.01-9.62-7.89-10.67,4.88-1.04,7.89-4.77,7.89-10.66V10.63c0-5.87-4.76-10.63-10.64-10.63h-67.13v37.5h-9.26V0h-34.48v37.5h-45.13v-8.8h35.88V0h-70.36v37.5h-9.26V0h-34.48v74.99h-9.26V0h-34.49v74.99h-9.26V0H0v97.3c0,3.51,2.88,6.38,6.39,6.38h48.21c3.51,0,6.39-2.88,6.39-6.38,0,3.51,2.87,6.38,6.39,6.38h48.21c3.51,0,6.38-2.88,6.38-6.38v-31.11h9.26v37.49h70.36v-28.7h-35.88v-8.8h45.13v37.49h34.48v-37.49h9.26v37.49h34.47v-37.49h6.07c1.77,0,3.19,1.43,3.19,3.19v27.92c0,3.51,2.88,6.38,6.39,6.38h27.64v-6.38"/>
+      </g>
+    </svg>
+  </div>
+  <div class="menu-btn" role="button" aria-label="Menu">
+    <span></span><span></span>
+  </div>
+</div>
+
+<div id="scene-container">
+  <canvas id="canvas"></canvas>
+</div>
+
+<!-- Zone texts -->
+<div class="zone-text" id="zone-extraction" >
+  <div class="zone-label-row" id="extraction-label-row">
+    <div class="zone-icon">
+      <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+    </div>
+    <div class="zone-divider"></div>
+    <div class="zone-title" id="extraction-title">Extraction</div>
+  </div>
+  <div class="zone-desc" id="extraction-desc">Explore the beginning of the mining cycle, where material is extracted, moved, and monitored through connected technologies.</div>
+</div>
+
+<div class="zone-text" id="zone-comminution" >
+  <div class="zone-label-row">
+    <div class="zone-icon">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+    </div>
+    <div class="zone-divider"></div>
+    <div class="zone-title">Comminution</div>
+  </div>
+  <div class="zone-desc">A transitional stage focused on reducing material size and preparing ore for downstream processing.</div>
+</div>
+
+<div class="zone-text" id="zone-processing" >
+  <div class="zone-label-row">
+    <div class="zone-icon">
+      <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M8 7h8M8 12h8M8 17h4"/></svg>
+    </div>
+    <div class="zone-divider"></div>
+    <div class="zone-title">Processing</div>
+  </div>
+  <div class="zone-desc">Processing systems designed to support efficiency, consistency, and operational visibility across the plant.</div>
+</div>
+
+<div class="zone-text" id="zone-tailings" >
+  <div class="zone-label-row">
+    <div class="zone-icon">
+      <svg viewBox="0 0 24 24"><path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/></svg>
+    </div>
+    <div class="zone-divider"></div>
+    <div class="zone-title">Tailings</div>
+  </div>
+  <div class="zone-desc">Solutions that support safer tailings management, improved water handling, and more sustainable mining outcomes.</div>
+</div>
+
+<!-- Hotspots -->
+<div class="hotspot primary" id="hs-payload">
+  <div class="hotspot-dot"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/></svg></div>
+  <div class="hotspot-label">Payload monitoring</div>
+</div>
+<div class="hotspot" id="hs-frag">
+  <div class="hotspot-dot"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/></svg></div>
+  <div class="hotspot-label">Fragmentation</div>
+</div>
+<div class="hotspot" id="hs-digging">
+  <div class="hotspot-dot"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/></svg></div>
+  <div class="hotspot-label">Digging performance</div>
+</div>
+<div class="hotspot" id="hs-material">
+  <div class="hotspot-dot"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/></svg></div>
+  <div class="hotspot-label">Material tracking</div>
+</div>
+<div class="hotspot" id="hs-site">
+  <div class="hotspot-dot"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/></svg></div>
+  <div class="hotspot-label">Site visibility</div>
+</div>
+
+
+<!-- Payload monitoring overlay -->
+<div class="payload-overlay" id="payload-overlay">
+  <div class="payload-overlay-inner">
+    <div class="payload-overlay-title"><span class="payload-status-dot"></span>Live payload</div>
+    <div class="payload-metric">
+      <span class="payload-metric-label">Bucket weight</span>
+      <span class="payload-metric-value" id="po-bucket">0.0 t</span>
+    </div>
+    <div class="payload-metric">
+      <span class="payload-metric-label">Truck load</span>
+      <span class="payload-metric-value" id="po-truck">0.0 / 220 t</span>
+    </div>
+    <div class="payload-bar-track">
+      <div class="payload-bar-fill" id="po-bar"></div>
+    </div>
+    <div class="payload-metric">
+      <span class="payload-metric-label">Pass</span>
+      <span class="payload-metric-value" id="po-pass">—</span>
+    </div>
+    <div class="payload-pass-label" id="po-status">Awaiting load cycle</div>
+  </div>
+</div>
+
+<div class="scroll-indicator" id="scroll-ind">
+  <span>Scroll</span>
+  <div class="scroll-arrow"></div>
+</div>
+
+<div class="progress-dots">
+  <div class="progress-dot active" data-zone="0"></div>
+  <div class="progress-dot" data-zone="1"></div>
+  <div class="progress-dot" data-zone="2"></div>
+  <div class="progress-dot" data-zone="3"></div>
+</div>
+
+<div class="scroll-spacer"></div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let W, H, dpr;
+
+function resize() {
+  dpr = Math.min(window.devicePixelRatio, 2);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+let scrollProgress = 0;
+let currentZone = 0;
+
+// Mouse parallax
+let mouseX = 0, mouseY = 0;
+let smoothMouseX = 0, smoothMouseY = 0;
+window.addEventListener('mousemove', (e) => {
+  mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+  mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+});
+
+let payloadFocused = false;
+let payloadTransition = 0;
+let payloadAnimTime = 0;
+let payloadLoadProgress = 0;
+let payloadPass = 0;
+let payloadCyclePhase = 'idle';
+let payloadCycleTimer = 0;
+let bucketAnimPhase = 0;
+
+const extractionTitle = document.getElementById('extraction-title');
+const extractionDesc = document.getElementById('extraction-desc');
+const extractionLabelRow = document.getElementById('extraction-label-row');
+const zoneExtraction = document.getElementById('zone-extraction');
+
+const origTitle = extractionTitle.textContent;
+const origDesc = extractionDesc.textContent;
+
+function enterPayloadFocus() {
+  if (payloadFocused) return;
+  payloadFocused = true;
+  payloadLoadProgress = 0;
+  payloadPass = 0;
+  payloadCyclePhase = 'idle';
+  payloadCycleTimer = 0;
+  bucketAnimPhase = 0;
+
+  extractionTitle.textContent = 'Payload monitoring';
+  extractionDesc.textContent = 'Operators receive real-time feedback on bucket weight, allowing them to make precise loading decisions on the spot. A dedicated in-cab display provides both visual and audio alerts, ensuring they stay within target ranges. The system tracks truck loads pass-by-pass and automatically detects when a new truck is being loaded.';
+  zoneExtraction.classList.add('payload-active');
+
+  const hsPayload = document.getElementById('hs-payload');
+  hsPayload.classList.add('active');
+  hsPayload.classList.add('visible');
+  document.querySelectorAll('.hotspot:not(#hs-payload)').forEach(h => h.classList.remove('visible'));
+}
+
+function exitPayloadFocus() {
+  if (!payloadFocused) return;
+  payloadFocused = false;
+
+  extractionTitle.textContent = origTitle;
+  extractionDesc.textContent = origDesc;
+  zoneExtraction.classList.remove('payload-active');
+
+  const hsPayload = document.getElementById('hs-payload');
+  hsPayload.classList.remove('active');
+
+  if (currentZone === 0) {
+    document.querySelectorAll('.hotspot').forEach(h => h.classList.add('visible'));
+  }
+
+  document.getElementById('payload-overlay').classList.remove('visible');
+}
+
+document.getElementById('hs-payload').addEventListener('click', () => {
+  if (payloadFocused) {
+    exitPayloadFocus();
+  } else {
+    enterPayloadFocus();
+  }
+});
+
+function updateScroll() {
+  if (payloadFocused) return;
+
+  const maxScroll = document.querySelector('.scroll-spacer').offsetHeight - window.innerHeight;
+  scrollProgress = Math.max(0, Math.min(1, window.scrollY / maxScroll));
+  currentZone = Math.min(3, Math.floor(scrollProgress * 4));
+
+  document.getElementById('scroll-ind').classList.toggle('hidden', scrollProgress > 0.02);
+
+  ['extraction', 'comminution', 'processing', 'tailings'].forEach((z, i) => {
+    document.getElementById('zone-' + z).classList.toggle('active', currentZone === i);
+  });
+
+  document.querySelectorAll('.progress-dot').forEach((d, i) => {
+    d.classList.toggle('active', i === currentZone);
+  });
+
+  const hotspotsVisible = currentZone === 0;
+  document.querySelectorAll('.hotspot').forEach(h => {
+    h.classList.toggle('visible', hotspotsVisible);
+  });
+}
+
+window.addEventListener('scroll', updateScroll, { passive: true });
+
+document.querySelectorAll('.progress-dot').forEach(dot => {
+  dot.addEventListener('click', () => {
+    if (payloadFocused) return;
+    const zone = parseInt(dot.dataset.zone);
+    const maxScroll = document.querySelector('.scroll-spacer').offsetHeight - window.innerHeight;
+    const target = (zone / 4 + 0.02) * maxScroll;
+    window.scrollTo({ top: target, behavior: 'smooth' });
+  });
+});
+
+const ISO_ANGLE = Math.PI / 6;
+const COS_A = Math.cos(ISO_ANGLE);
+const SIN_A = Math.sin(ISO_ANGLE);
+
+function isoProject(x, y, z) {
+  return {
+    sx: (y - x) * COS_A,
+    sy: (x + y) * SIN_A - z
+  };
+}
+
+function worldToScreen(x, y, z, camX, camY, scale) {
+  const p = isoProject(x, y, z);
+  return {
+    sx: W / 2 + (p.sx - camX) * scale,
+    sy: H / 2 + (p.sy - camY) * scale
+  };
+}
+
+function drawIsoBox(cx, cy, cz, w, d, h, topCol, leftCol, rightCol, camX, camY, scale) {
+  const corners = [
+    [cx - w/2, cy - d/2, cz],
+    [cx + w/2, cy - d/2, cz],
+    [cx + w/2, cy + d/2, cz],
+    [cx - w/2, cy + d/2, cz],
+    [cx - w/2, cy - d/2, cz + h],
+    [cx + w/2, cy - d/2, cz + h],
+    [cx + w/2, cy + d/2, cz + h],
+    [cx - w/2, cy + d/2, cz + h],
+  ];
+  const sc = corners.map(c => worldToScreen(c[0], c[1], c[2], camX, camY, scale));
+
+  ctx.fillStyle = topCol;
+  ctx.beginPath();
+  ctx.moveTo(sc[4].sx, sc[4].sy);
+  ctx.lineTo(sc[5].sx, sc[5].sy);
+  ctx.lineTo(sc[6].sx, sc[6].sy);
+  ctx.lineTo(sc[7].sx, sc[7].sy);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = leftCol;
+  ctx.beginPath();
+  ctx.moveTo(sc[7].sx, sc[7].sy);
+  ctx.lineTo(sc[6].sx, sc[6].sy);
+  ctx.lineTo(sc[2].sx, sc[2].sy);
+  ctx.lineTo(sc[3].sx, sc[3].sy);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = rightCol;
+  ctx.beginPath();
+  ctx.moveTo(sc[4].sx, sc[4].sy);
+  ctx.lineTo(sc[7].sx, sc[7].sy);
+  ctx.lineTo(sc[3].sx, sc[3].sy);
+  ctx.lineTo(sc[0].sx, sc[0].sy);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawIsoPlane(cx, cy, cz, w, d, col, camX, camY, scale) {
+  const corners = [
+    worldToScreen(cx - w/2, cy - d/2, cz, camX, camY, scale),
+    worldToScreen(cx + w/2, cy - d/2, cz, camX, camY, scale),
+    worldToScreen(cx + w/2, cy + d/2, cz, camX, camY, scale),
+    worldToScreen(cx - w/2, cy + d/2, cz, camX, camY, scale),
+  ];
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.moveTo(corners[0].sx, corners[0].sy);
+  corners.forEach(c => ctx.lineTo(c.sx, c.sy));
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawIsoPolygon(points, z, col, camX, camY, scale) {
+  if (points.length < 3) return;
+  const sc = points.map(p => worldToScreen(p[0], p[1], z, camX, camY, scale));
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.moveTo(sc[0].sx, sc[0].sy);
+  for (let i = 1; i < sc.length; i++) ctx.lineTo(sc[i].sx, sc[i].sy);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawIsoLine(x1, y1, z1, x2, y2, z2, col, width, camX, camY, scale) {
+  const p1 = worldToScreen(x1, y1, z1, camX, camY, scale);
+  const p2 = worldToScreen(x2, y2, z2, camX, camY, scale);
+  ctx.strokeStyle = col;
+  ctx.lineWidth = width;
+  ctx.beginPath();
+  ctx.moveTo(p1.sx, p1.sy);
+  ctx.lineTo(p2.sx, p2.sy);
+  ctx.stroke();
+}
+
+// ——— Smooth ellipse points with optional gap for haul road cut ———
+function ellipsePoints(rx, ry, cx, cy, segments, gapStart, gapEnd) {
+  const pts = [];
+  for (let i = 0; i < segments; i++) {
+    const a = (i / segments) * Math.PI * 2;
+    if (gapStart !== undefined && a >= gapStart && a <= gapEnd) continue;
+    pts.push([cx + Math.cos(a) * rx, cy + Math.sin(a) * ry]);
+  }
+  return pts;
+}
+
+// ——— Draw bench wall (vertical face between two ellipse levels) ———
+function drawBenchWall(outerPts, innerPts, zTop, zBot, wallCol, camX, camY, scale) {
+  // Draw wall segments connecting outer top to outer bottom
+  for (let i = 0; i < outerPts.length; i++) {
+    const ni = (i + 1) % outerPts.length;
+    const p1t = worldToScreen(outerPts[i][0], outerPts[i][1], zTop, camX, camY, scale);
+    const p2t = worldToScreen(outerPts[ni][0], outerPts[ni][1], zTop, camX, camY, scale);
+    const p1b = worldToScreen(outerPts[i][0], outerPts[i][1], zBot, camX, camY, scale);
+    const p2b = worldToScreen(outerPts[ni][0], outerPts[ni][1], zBot, camX, camY, scale);
+
+    ctx.fillStyle = wallCol;
+    ctx.beginPath();
+    ctx.moveTo(p1t.sx, p1t.sy);
+    ctx.lineTo(p2t.sx, p2t.sy);
+    ctx.lineTo(p2b.sx, p2b.sy);
+    ctx.lineTo(p1b.sx, p1b.sy);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+// ——— Open Pit Mine — reference-inspired terraced pit ———
+function drawOpenPitMine(cx, cy, camX, camY, scale, time) {
+  const pcx = cx;
+  const pcy = cy;
+
+  // Surrounding terrain base — large ground patch giving the mine context
+  drawIsoPlane(pcx, pcy, 0, 32, 26, 'rgba(12,22,42,0.45)', camX, camY, scale);
+
+  // Subtle terrain texture patches (Hut 8 style — light environmental context)
+  drawIsoPlane(pcx - 8, pcy - 8, 0.01, 5, 3, 'rgba(16,28,48,0.15)', camX, camY, scale);
+  drawIsoPlane(pcx + 10, pcy - 6, 0.01, 4, 4, 'rgba(16,28,48,0.12)', camX, camY, scale);
+
+  // ——— Concentric bench terraces (5 levels, outermost to innermost) ———
+  const benchH = 0.7;
+  const benches = [
+    { rx: 10.5, ry: 8.2, z: 0,     topCol: 'rgba(18,30,52,0.65)',  wallCol: 'rgba(14,24,44,0.80)',  edgeCol: 'rgba(40,65,100,0.25)' },
+    { rx: 8.8,  ry: 6.8, z: -0.7,  topCol: 'rgba(20,34,56,0.60)',  wallCol: 'rgba(16,26,46,0.75)',  edgeCol: 'rgba(45,70,105,0.22)' },
+    { rx: 7.0,  ry: 5.4, z: -1.4,  topCol: 'rgba(22,36,58,0.55)',  wallCol: 'rgba(18,28,48,0.70)',  edgeCol: 'rgba(48,74,110,0.20)' },
+    { rx: 5.2,  ry: 4.0, z: -2.1,  topCol: 'rgba(24,38,62,0.50)',  wallCol: 'rgba(20,32,52,0.65)',  edgeCol: 'rgba(50,78,115,0.18)' },
+    { rx: 3.4,  ry: 2.6, z: -2.8,  topCol: 'rgba(26,42,66,0.45)',  wallCol: 'rgba(22,34,55,0.60)',  edgeCol: 'rgba(52,80,118,0.16)' },
+  ];
+
+  // Haul road cuts through the right side — gap angle range
+  const roadGapStart = -0.4;
+  const roadGapEnd = 0.5;
+
+  // Draw benches back-to-front (outermost first)
+  for (let b = 0; b < benches.length; b++) {
+    const bench = benches[b];
+    const pts = ellipsePoints(bench.rx, bench.ry, pcx, pcy, 36);
+
+    // Bench wall (vertical face)
+    drawBenchWall(pts, pts, bench.z, bench.z - benchH, bench.wallCol, camX, camY, scale);
+
+    // Bench surface (flat terrace top)
+    drawIsoPolygon(pts, bench.z, bench.topCol, camX, camY, scale);
+
+    // Bench edge accent line
+    ctx.save();
+    const edgePts = pts.map(p => worldToScreen(p[0], p[1], bench.z, camX, camY, scale));
+    ctx.strokeStyle = bench.edgeCol;
+    ctx.lineWidth = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(edgePts[0].sx, edgePts[0].sy);
+    for (let i = 1; i < edgePts.length; i++) ctx.lineTo(edgePts[i].sx, edgePts[i].sy);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Pit floor (deepest level)
+  const floorZ = -3.5;
+  const floorPts = ellipsePoints(2.8, 2.0, pcx, pcy, 24);
+  drawBenchWall(floorPts, floorPts, -2.8, floorZ, 'rgba(24,36,58,0.55)', camX, camY, scale);
+  drawIsoPolygon(floorPts, floorZ, 'rgba(28,42,65,0.50)', camX, camY, scale);
+
+  // Ore face / active mining face at pit floor
+  drawIsoPlane(pcx - 0.8, pcy - 0.2, floorZ + 0.01, 2.0, 1.4, 'rgba(40,52,72,0.20)', camX, camY, scale);
+
+  // ——— Haul Road — winding ramp from surface to pit floor (right side) ———
+  const roadCol = 'rgba(22,35,58,0.70)';
+  const roadMarkCol = 'rgba(55,80,120,0.18)';
+  const rw = 1.3;
+
+  // Road path waypoints spiraling from top-right down to pit floor
+  const roadPath = [
+    // Surface entry from far right
+    { x: pcx + 16, y: pcy - 3, z: 0.05 },
+    { x: pcx + 12, y: pcy - 1.5, z: 0.02 },
+    // Cutting into bench 1 along right edge
+    { x: pcx + 10, y: pcy + 1, z: -0.15 },
+    { x: pcx + 8.5, y: pcy + 4, z: -0.45 },
+    // Sweeping south along bench 2
+    { x: pcx + 6, y: pcy + 6, z: -0.8 },
+    { x: pcx + 3, y: pcy + 6.5, z: -1.1 },
+    // Curving west along bench 3
+    { x: pcx + 0.5, y: pcy + 5.5, z: -1.5 },
+    { x: pcx - 2, y: pcy + 4, z: -1.9 },
+    // Turning north along bench 4
+    { x: pcx - 3, y: pcy + 2, z: -2.3 },
+    { x: pcx - 2.5, y: pcy + 0, z: -2.6 },
+    // Final descent to pit floor
+    { x: pcx - 1, y: pcy - 0.5, z: -2.9 },
+    { x: pcx + 0.5, y: pcy + 0.5, z: -3.3 },
+  ];
+
+  // Draw road segments
+  for (let i = 0; i < roadPath.length - 1; i++) {
+    const s = roadPath[i];
+    const e = roadPath[i + 1];
+    const dx = e.x - s.x, dy = e.y - s.y;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const nx = -dy / len * (rw / 2), ny = dx / len * (rw / 2);
+
+    const roadPoly = [
+      [s.x + nx, s.y + ny], [e.x + nx, e.y + ny],
+      [e.x - nx, e.y - ny], [s.x - nx, s.y - ny],
+    ];
+    const zMid = (s.z + e.z) / 2;
+    drawIsoPolygon(roadPoly, zMid, roadCol, camX, camY, scale);
+
+    // Road edge marking
+    drawIsoLine(s.x + nx, s.y + ny, s.z, e.x + nx, e.y + ny, e.z, roadMarkCol, 0.6, camX, camY, scale);
+  }
+
+  // ——— Surface exit road extending to far right ———
+  const exitRoad = [
+    [pcx + 16, pcy - 4.0], [pcx + 22, pcy - 6],
+    [pcx + 22, pcy - 4.5], [pcx + 16, pcy - 2.0],
+  ];
+  drawIsoPolygon(exitRoad, 0.03, 'rgba(18,30,52,0.50)', camX, camY, scale);
+  drawIsoLine(pcx + 16, pcy - 4, 0.04, pcx + 22, pcy - 6, 0.04, roadMarkCol, 0.5, camX, camY, scale);
+
+  // ——— Overburden / waste dumps (Hut 8 style — spaced, not cluttered) ———
+  // Large waste dump — left of pit, good distance
+  drawIsoBox(pcx - 14, pcy - 1, 0, 3.0, 2.2, 1.0,
+    'rgba(22,36,56,0.40)', 'rgba(16,26,44,0.45)', 'rgba(18,30,48,0.45)', camX, camY, scale);
+  drawIsoBox(pcx - 13.8, pcy - 0.8, 1.0, 2.0, 1.4, 0.5,
+    'rgba(26,40,60,0.30)', 'rgba(18,30,48,0.35)', 'rgba(20,34,52,0.35)', camX, camY, scale);
+
+  // Smaller stockpile near exit road
+  drawIsoBox(pcx + 18, pcy - 5, 0, 2.0, 1.6, 0.7,
+    'rgba(22,36,56,0.35)', 'rgba(16,26,44,0.40)', 'rgba(18,30,48,0.40)', camX, camY, scale);
+
+  // ROM pad / ore stockpile between pit and crusher direction
+  drawIsoBox(pcx + 8, pcy + 10, 0, 3.5, 2.5, 0.6,
+    'rgba(24,38,58,0.35)', 'rgba(18,28,46,0.40)', 'rgba(20,32,50,0.40)', camX, camY, scale);
+  drawIsoBox(pcx + 8.2, pcy + 10, 0.6, 2.5, 1.6, 0.4,
+    'rgba(28,44,64,0.25)', 'rgba(20,34,52,0.30)', 'rgba(22,36,54,0.30)', camX, camY, scale);
+
+  // ——— Surface infrastructure — generous spacing (Hut 8 inspired) ———
+
+  // Site office / control building — top-right, away from pit edge
+  drawIsoBox(pcx + 14, pcy - 8, 0, 2.8, 1.8, 1.2,
+    'rgba(28,44,68,0.50)', 'rgba(20,34,55,0.50)', 'rgba(24,38,60,0.50)', camX, camY, scale);
+  // Roof accent
+  drawIsoBox(pcx + 14, pcy - 8, 1.2, 2.9, 1.9, 0.08,
+    'rgba(40,58,82,0.35)', 'rgba(30,46,68,0.25)', 'rgba(34,50,72,0.25)', camX, camY, scale);
+  // Window glow
+  const offWin = worldToScreen(pcx + 14, pcy - 8, 0.8, camX, camY, scale);
+  ctx.fillStyle = 'rgba(70,120,190,0.10)';
+  ctx.fillRect(offWin.sx - 5, offWin.sy - 2, 10, 3);
+
+  // Maintenance / workshop shed — far left
+  drawIsoBox(pcx - 16, pcy + 5, 0, 3.2, 2.0, 1.5,
+    'rgba(24,38,60,0.40)', 'rgba(18,28,48,0.45)', 'rgba(20,32,52,0.45)', camX, camY, scale);
+  drawIsoBox(pcx - 16, pcy + 5, 1.5, 3.3, 2.1, 0.06,
+    'rgba(35,52,76,0.30)', 'rgba(25,38,58,0.20)', 'rgba(28,42,62,0.20)', camX, camY, scale);
+
+  // Fuel bay — small structure bottom-right
+  drawIsoBox(pcx + 16, pcy + 8, 0, 1.6, 1.2, 0.9,
+    'rgba(26,40,62,0.38)', 'rgba(18,30,50,0.42)', 'rgba(20,34,54,0.42)', camX, camY, scale);
+
+  // Water tank / silos — top-left far
+  drawIsoBox(pcx - 12, pcy - 7, 0, 1.2, 1.2, 2.0,
+    'rgba(28,44,68,0.35)', 'rgba(20,34,55,0.40)', 'rgba(24,38,60,0.40)', camX, camY, scale);
+  drawIsoBox(pcx - 12, pcy - 7, 2.0, 1.3, 1.3, 0.08,
+    'rgba(38,56,80,0.25)', 'rgba(28,42,64,0.18)', 'rgba(32,48,70,0.18)', camX, camY, scale);
+
+  // Second smaller silo next to first
+  drawIsoBox(pcx - 10, pcy - 7.5, 0, 0.9, 0.9, 1.5,
+    'rgba(26,40,62,0.30)', 'rgba(18,30,50,0.35)', 'rgba(20,34,54,0.35)', camX, camY, scale);
+
+  // ——— Parked equipment near maintenance (Hut 8: peripheral objects) ———
+  // Small utility vehicle
+  drawIsoBox(pcx - 14, pcy + 8, 0, 1.0, 1.6, 0.5,
+    'rgba(30,46,68,0.30)', 'rgba(22,36,56,0.35)', 'rgba(24,38,58,0.35)', camX, camY, scale);
+
+  // ——— Truck on haul road (surface level, loaded, heading out) ———
+  drawTruckOnRoad(pcx + 17, pcy - 4.5, 0.08, camX, camY, scale, 0.85);
+
+
+  // ——— Scattered small detail elements (Hut 8 breathing room) ———
+  drawSmallBox(pcx - 18, pcy - 4, 0, 0.7, 0.7, 0.3, 0.15, camX, camY, scale);
+  drawSmallBox(pcx + 20, pcy + 2, 0, 0.8, 0.6, 0.25, 0.12, camX, camY, scale);
+  drawSmallBox(pcx - 6, pcy + 12, 0, 0.6, 0.9, 0.3, 0.14, camX, camY, scale);
+  drawSmallBox(pcx + 12, pcy + 12, 0, 0.5, 0.5, 0.2, 0.10, camX, camY, scale);
+  drawSmallBox(pcx - 19, pcy + 10, 0, 0.6, 0.6, 0.35, 0.10, camX, camY, scale);
+
+  // Subtle dust particles near pit (ambient life)
+  if (time) {
+    ctx.save();
+    for (let i = 0; i < 6; i++) {
+      const seed = i * 137.508;
+      const px = pcx + Math.sin(seed + time * 0.15) * 4 + Math.cos(seed) * 6;
+      const py = pcy + Math.cos(seed + time * 0.12) * 3 + Math.sin(seed) * 4;
+      const pz = 0.5 + Math.sin(time * 0.4 + seed) * 0.3;
+      const pp = worldToScreen(px, py, pz, camX, camY, scale);
+      const alpha = 0.04 + Math.sin(time * 0.5 + seed) * 0.02;
+      ctx.fillStyle = `rgba(80,110,160,${alpha})`;
+      ctx.beginPath();
+      ctx.arc(pp.sx, pp.sy, 1.5 + Math.sin(seed) * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+function drawTruckOnRoad(x, y, z, camX, camY, scale, fill) {
+  // ── Ground shadow (soft ellipse) ──
+  const rshC = worldToScreen(x, y, z - 0.02, camX, camY, scale);
+  const rshE = worldToScreen(x + 1.5, y, z - 0.02, camX, camY, scale);
+  const rshRx = Math.abs(rshE.sx - rshC.sx);
+  const rshRy = rshRx * 0.45;
+  ctx.save();
+  const rshG = ctx.createRadialGradient(rshC.sx, rshC.sy, 0, rshC.sx, rshC.sy, rshRx);
+  rshG.addColorStop(0, 'rgba(4,8,18,0.25)');
+  rshG.addColorStop(0.6, 'rgba(4,8,18,0.10)');
+  rshG.addColorStop(1, 'rgba(4,8,18,0)');
+  ctx.fillStyle = rshG;
+  ctx.beginPath();
+  ctx.ellipse(rshC.sx, rshC.sy, rshRx, rshRy, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Rear wheels — unified block
+  drawIsoBox(x, y + 0.3, z, 1.5, 0.9, 0.55,
+    '#141a2c', '#0d1220', '#101626', camX, camY, scale);
+  // Front wheels — unified block
+  drawIsoBox(x, y - 0.85, z, 1.1, 0.55, 0.50,
+    '#141a2c', '#0d1220', '#101626', camX, camY, scale);
+  // Chassis rail
+  drawIsoBox(x, y - 0.15, z + 0.50, 1.2, 2.1, 0.15,
+    '#1a2440', '#121a30', '#151e38', camX, camY, scale);
+  // Dump tray — single open body
+  drawIsoBox(x, y + 0.2, z + 0.65, 1.2, 1.5, 0.08,
+    '#2e4468', '#203352', '#253858', camX, camY, scale);
+  drawIsoBox(x - 0.58, y + 0.2, z + 0.73, 0.06, 1.4, 0.65,
+    '#3a5478', '#2a3e5e', '#304466', camX, camY, scale);
+  drawIsoBox(x + 0.58, y + 0.2, z + 0.73, 0.06, 1.4, 0.65,
+    '#344e72', '#263c5a', '#2c4462', camX, camY, scale);
+  drawIsoBox(x, y + 0.90, z + 0.73, 1.15, 0.06, 0.65,
+    '#3a5478', '#2a3e5e', '#304466', camX, camY, scale);
+  // Payload
+  if (fill > 0.02) {
+    drawIsoBox(x, y + 0.2, z + 0.73, 1.0, 1.2, fill * 0.40,
+      'rgba(90,80,60,0.50)', 'rgba(68,58,42,0.50)', 'rgba(78,68,50,0.50)',
+      camX, camY, scale);
+  }
+  // Cab — single clear volume
+  drawIsoBox(x, y - 0.85, z + 0.65, 1.1, 0.7, 0.80,
+    '#4a6898', '#385480', '#3e5a88', camX, camY, scale);
+  // Windshield hint
+  const rwP = [
+    worldToScreen(x - 0.45, y - 1.20, z + 0.85, camX, camY, scale),
+    worldToScreen(x + 0.45, y - 1.20, z + 0.85, camX, camY, scale),
+    worldToScreen(x + 0.45, y - 1.20, z + 1.30, camX, camY, scale),
+    worldToScreen(x - 0.45, y - 1.20, z + 1.30, camX, camY, scale),
+  ];
+  ctx.fillStyle = 'rgba(80,130,200,0.14)';
+  ctx.beginPath();
+  ctx.moveTo(rwP[0].sx, rwP[0].sy);
+  for (let i = 1; i < 4; i++) ctx.lineTo(rwP[i].sx, rwP[i].sy);
+  ctx.closePath();
+  ctx.fill();
+}
+
+
+// ——— Excavator — minimalist silhouette ———
+function drawExcavator(x, y, z, camX, camY, scale, bucketSwing) {
+  const s = bucketSwing || 0;
+
+  // ── Ground shadow ──
+  const shadowCenter = worldToScreen(x, y, z - 0.02, camX, camY, scale);
+  const shadowEdge = worldToScreen(x + 2.0, y, z - 0.02, camX, camY, scale);
+  const shadowRx = Math.abs(shadowEdge.sx - shadowCenter.sx);
+  ctx.save();
+  const shGrad = ctx.createRadialGradient(shadowCenter.sx, shadowCenter.sy, 0, shadowCenter.sx, shadowCenter.sy, shadowRx);
+  shGrad.addColorStop(0, 'rgba(4,8,18,0.25)');
+  shGrad.addColorStop(1, 'rgba(4,8,18,0)');
+  ctx.fillStyle = shGrad;
+  ctx.beginPath();
+  ctx.ellipse(shadowCenter.sx, shadowCenter.sy, shadowRx, shadowRx * 0.42, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // ── UNDERCARRIAGE — two tracks + frame ──
+  drawIsoBox(x - 1.0, y, z, 0.50, 3.0, 0.35,
+    '#131a2e', '#0c1222', '#0f1628', camX, camY, scale);
+  drawIsoBox(x + 1.0, y, z, 0.50, 3.0, 0.35,
+    '#131a2e', '#0c1222', '#0f1628', camX, camY, scale);
+  drawIsoBox(x, y, z + 0.30, 1.8, 1.5, 0.20,
+    '#1a2440', '#121a30', '#151e38', camX, camY, scale);
+
+  // ── UPPER BODY ──
+  drawIsoBox(x, y - 0.15, z + 0.50, 2.1, 2.2, 1.0,
+    '#263c5c', '#1c3050', '#213658', camX, camY, scale);
+  // Counterweight
+  drawIsoBox(x, y - 1.30, z + 0.50, 2.2, 0.50, 1.0,
+    '#1e3050', '#162644', '#1a2c4a', camX, camY, scale);
+
+  // ── CAB ──
+  const cabX = x - 0.50, cabY = y + 0.35, cabZ = z + 1.50;
+  drawIsoBox(cabX, cabY, cabZ, 1.05, 1.05, 1.0,
+    '#4a6898', '#385480', '#3e5a88', camX, camY, scale);
+  // Windshield
+  const gp = [
+    worldToScreen(cabX - 0.50, cabY + 0.54, cabZ + 0.15, camX, camY, scale),
+    worldToScreen(cabX + 0.50, cabY + 0.54, cabZ + 0.15, camX, camY, scale),
+    worldToScreen(cabX + 0.50, cabY + 0.54, cabZ + 0.85, camX, camY, scale),
+    worldToScreen(cabX - 0.50, cabY + 0.54, cabZ + 0.85, camX, camY, scale),
+  ];
+  ctx.fillStyle = 'rgba(90,145,215,0.18)';
+  ctx.beginPath();
+  ctx.moveTo(gp[0].sx, gp[0].sy);
+  for (let i = 1; i < 4; i++) ctx.lineTo(gp[i].sx, gp[i].sy);
+  ctx.closePath();
+  ctx.fill();
+
+  // ── BOOM ARM ──
+  const pivotX = x + 0.10, pivotY = y + 0.65, pivotZ = z + 1.50;
+  const boomLen = 2.8;
+  const boomAngle = 0.40 + s * 0.32;
+  const boomTipY = pivotY + Math.cos(boomAngle) * boomLen;
+  const boomTipZ = pivotZ + Math.sin(boomAngle) * boomLen;
+
+  const boomSegs = 4;
+  for (let i = 0; i < boomSegs; i++) {
+    const t0 = i / boomSegs, t1 = (i + 1) / boomSegs;
+    const y0 = pivotY + (boomTipY - pivotY) * t0;
+    const z0 = pivotZ + (boomTipZ - pivotZ) * t0;
+    const y1 = pivotY + (boomTipY - pivotY) * t1;
+    const z1 = pivotZ + (boomTipZ - pivotZ) * t1;
+    const w0 = 0.42 - t0 * 0.08;
+    const w1 = 0.42 - t1 * 0.08;
+    const h0 = 0.44 - t0 * 0.06;
+    const h1 = 0.44 - t1 * 0.06;
+    const topPts = [
+      worldToScreen(pivotX - w0/2, y0, z0 + h0, camX, camY, scale),
+      worldToScreen(pivotX + w0/2, y0, z0 + h0, camX, camY, scale),
+      worldToScreen(pivotX + w1/2, y1, z1 + h1, camX, camY, scale),
+      worldToScreen(pivotX - w1/2, y1, z1 + h1, camX, camY, scale),
+    ];
+    ctx.fillStyle = '#3a5478';
+    ctx.beginPath();
+    ctx.moveTo(topPts[0].sx, topPts[0].sy);
+    for (let j = 1; j < 4; j++) ctx.lineTo(topPts[j].sx, topPts[j].sy);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // ── STICK ARM ──
+  const stickLen = 2.2;
+  const stickAngle = -0.50 - s * 0.75;
+  const stickTipY = boomTipY + Math.cos(stickAngle) * stickLen;
+  const stickTipZ = boomTipZ + Math.sin(stickAngle) * stickLen;
+
+  const stickSegs = 3;
+  for (let i = 0; i < stickSegs; i++) {
+    const t0 = i / stickSegs, t1 = (i + 1) / stickSegs;
+    const y0 = boomTipY + (stickTipY - boomTipY) * t0;
+    const z0 = boomTipZ + (stickTipZ - boomTipZ) * t0;
+    const y1 = boomTipY + (stickTipY - boomTipY) * t1;
+    const z1 = boomTipZ + (stickTipZ - boomTipZ) * t1;
+    const w0 = 0.32 - t0 * 0.05;
+    const w1 = 0.32 - t1 * 0.05;
+    const h0 = 0.36 - t0 * 0.05;
+    const h1 = 0.36 - t1 * 0.05;
+    const topPts = [
+      worldToScreen(pivotX - w0/2, y0, z0 + h0, camX, camY, scale),
+      worldToScreen(pivotX + w0/2, y0, z0 + h0, camX, camY, scale),
+      worldToScreen(pivotX + w1/2, y1, z1 + h1, camX, camY, scale),
+      worldToScreen(pivotX - w1/2, y1, z1 + h1, camX, camY, scale),
+    ];
+    ctx.fillStyle = '#365070';
+    ctx.beginPath();
+    ctx.moveTo(topPts[0].sx, topPts[0].sy);
+    for (let j = 1; j < 4; j++) ctx.lineTo(topPts[j].sx, topPts[j].sy);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // ── BUCKET — simple scoop ──
+  const bkX = pivotX;
+  const bkY = stickTipY + 0.30;
+  const bkZ = stickTipZ - 0.20;
+  drawIsoBox(bkX, bkY, bkZ, 1.30, 0.70, 0.45,
+    '#445e82', '#344c6e', '#3a5476', camX, camY, scale);
+  drawIsoBox(bkX, bkY - 0.28, bkZ, 1.20, 0.10, 0.60,
+    '#3a5478', '#2a3e5e', '#304466', camX, camY, scale);
+
+  // ── Material in bucket (sand/dirt) — bright, visible when lifting ──
+  if (s > 0.03) {
+    const matAlpha = s >= 0.88 ? Math.max(0, (1.0 - s) / 0.12) : Math.min(1, (s - 0.03) / 0.07);
+    if (matAlpha > 0.01) {
+      const a = matAlpha * 0.95;
+      // Main dirt fill
+      drawIsoBox(bkX, bkY + 0.05, bkZ + 0.25, 1.15, 0.58, 0.35,
+        `rgba(155,135,95,${a.toFixed(3)})`,
+        `rgba(125,108,75,${a.toFixed(3)})`,
+        `rgba(140,120,85,${a.toFixed(3)})`, camX, camY, scale);
+      // Top heap
+      drawIsoBox(bkX, bkY + 0.05, bkZ + 0.55, 0.85, 0.40, 0.15,
+        `rgba(170,150,108,${(a * 0.85).toFixed(3)})`,
+        `rgba(138,120,85,${(a * 0.85).toFixed(3)})`,
+        `rgba(155,135,98,${(a * 0.85).toFixed(3)})`, camX, camY, scale);
+    }
+  }
+}
+
+// ——— Mining Haul Truck — minimalist silhouette ———
+function drawTruck(x, y, z, camX, camY, scale, fillLevel) {
+  // ── Ground shadow ──
+  const tshC = worldToScreen(x, y, z - 0.02, camX, camY, scale);
+  const tshE = worldToScreen(x + 2.2, y, z - 0.02, camX, camY, scale);
+  const tshRx = Math.abs(tshE.sx - tshC.sx);
+  ctx.save();
+  const tshG = ctx.createRadialGradient(tshC.sx, tshC.sy, 0, tshC.sx, tshC.sy, tshRx);
+  tshG.addColorStop(0, 'rgba(4,8,18,0.25)');
+  tshG.addColorStop(1, 'rgba(4,8,18,0)');
+  ctx.fillStyle = tshG;
+  ctx.beginPath();
+  ctx.ellipse(tshC.sx, tshC.sy, tshRx, tshRx * 0.40, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  const fill = fillLevel || 0;
+
+  // ── WHEELS ──
+  drawIsoBox(x - 0.85, y + 0.40, z, 0.60, 1.10, 0.70,
+    '#111828', '#0b0f1e', '#0d1222', camX, camY, scale);
+  drawIsoBox(x + 0.85, y + 0.40, z, 0.60, 1.10, 0.70,
+    '#111828', '#0b0f1e', '#0d1222', camX, camY, scale);
+  drawIsoBox(x - 0.52, y - 1.25, z, 0.45, 0.65, 0.62,
+    '#111828', '#0b0f1e', '#0d1222', camX, camY, scale);
+  drawIsoBox(x + 0.52, y - 1.25, z, 0.45, 0.65, 0.62,
+    '#111828', '#0b0f1e', '#0d1222', camX, camY, scale);
+
+  // ── DUMP BODY ──
+  const trayZ = z + 0.70;
+  const trayH = 1.25;
+  drawIsoBox(x, y + 0.35, trayZ, 2.0, 2.30, 0.12,
+    '#253856', '#1c2e4a', '#203350', camX, camY, scale);
+  drawIsoBox(x - 0.98, y + 0.35, trayZ + 0.12, 0.07, 2.30, trayH,
+    '#344e72', '#263c5a', '#2c4462', camX, camY, scale);
+  drawIsoBox(x + 0.98, y + 0.35, trayZ + 0.12, 0.07, 2.30, trayH,
+    '#2e4868', '#223a56', '#283e5e', camX, camY, scale);
+  drawIsoBox(x, y + 1.50, trayZ + 0.12, 1.90, 0.07, trayH,
+    '#344e72', '#263c5a', '#2c4462', camX, camY, scale);
+  drawIsoBox(x, y - 0.78, trayZ, 2.05, 0.10, trayH + 0.20,
+    '#3a5478', '#2a3e5e', '#304466', camX, camY, scale);
+
+  // ── PAYLOAD ──
+  if (fill > 0.02) {
+    const fH = 0.08 + fill * 0.55;
+    const fA = 0.42 + fill * 0.32;
+    drawIsoBox(x, y + 0.35, trayZ + 0.12, 1.70, 2.05, fH,
+      `rgba(95,82,60,${fA})`, `rgba(72,60,42,${fA})`, `rgba(82,70,50,${fA})`,
+      camX, camY, scale);
+  }
+
+  // ── CAB ──
+  const cabZ = z + 0.65;
+  drawIsoBox(x, y - 1.38, cabZ, 1.50, 1.0, 1.15,
+    '#4a6898', '#385480', '#3e5a88', camX, camY, scale);
+  // Windshield
+  const wP = [
+    worldToScreen(x - 0.64, y - 1.88, cabZ + 0.20, camX, camY, scale),
+    worldToScreen(x + 0.64, y - 1.88, cabZ + 0.20, camX, camY, scale),
+    worldToScreen(x + 0.64, y - 1.88, cabZ + 1.0, camX, camY, scale),
+    worldToScreen(x - 0.64, y - 1.88, cabZ + 1.0, camX, camY, scale),
+  ];
+  ctx.fillStyle = 'rgba(90,145,215,0.16)';
+  ctx.beginPath();
+  ctx.moveTo(wP[0].sx, wP[0].sy);
+  for (let i = 1; i < 4; i++) ctx.lineTo(wP[i].sx, wP[i].sy);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ——— Crusher building ———
+function drawCrusher(x, y, z, camX, camY, scale) {
+  drawIsoBox(x, y, z, 7, 5, 0.3, '#1a2848', '#121c38', '#162240', camX, camY, scale);
+  drawIsoBox(x, y, z + 0.3, 4.5, 3.5, 3.2, '#253858', '#1a2a45', '#1e3050', camX, camY, scale);
+  drawIsoBox(x, y, z + 3.5, 3.5, 2.5, 0.8, '#2e4468', '#203352', '#253858', camX, camY, scale);
+  drawIsoBox(x, y, z + 4.3, 4.0, 3.0, 0.15, '#354c6e', '#263a56', '#2c425e', camX, camY, scale);
+  drawIsoBox(x - 4, y, z + 2.0, 4, 0.8, 0.3, '#223050', '#182640', '#1c2c48', camX, camY, scale);
+  drawIsoBox(x - 2.5, y, z + 0.3, 0.3, 0.3, 1.7, '#1e2e4e', '#141e38', '#182440', camX, camY, scale);
+  drawIsoBox(x - 4.5, y, z + 0.3, 0.3, 0.3, 1.2, '#1e2e4e', '#141e38', '#182440', camX, camY, scale);
+  drawIsoBox(x + 4, y, z + 1.0, 4.5, 0.7, 0.25, '#223050', '#182640', '#1c2c48', camX, camY, scale);
+  drawIsoBox(x + 5.5, y, z + 0.3, 0.3, 0.3, 0.7, '#1e2e4e', '#141e38', '#182440', camX, camY, scale);
+  drawIsoBox(x + 2.5, y - 2, z + 0.3, 1.5, 1.2, 1.5, '#2e4468', '#203352', '#253858', camX, camY, scale);
+  const crWin = worldToScreen(x + 2.5, y - 2, z + 1.5, camX, camY, scale);
+  ctx.fillStyle = 'rgba(80,120,180,0.15)';
+  ctx.fillRect(crWin.sx - 4, crWin.sy - 3, 8, 4);
+}
+
+// ——— Processing plant ———
+function drawProcessingPlant(x, y, z, camX, camY, scale) {
+  drawIsoBox(x, y, z, 9, 6, 0.3, '#1a2848', '#121c38', '#162240', camX, camY, scale);
+  drawIsoBox(x, y, z + 0.3, 8, 5, 2.2, '#1e2e50', '#152040', '#1a2648', camX, camY, scale);
+  for (let i = 0; i < 3; i++) {
+    drawIsoBox(x - 2 + i * 2, y - 1.5, z + 2.5, 1.4, 1.4, 3.0, '#283e60', '#1e3050', '#223458', camX, camY, scale);
+    drawIsoBox(x - 2 + i * 2, y - 1.5, z + 5.5, 1.5, 1.5, 0.12, '#304668', '#223658', '#283e62', camX, camY, scale);
+  }
+  drawIsoBox(x, y - 1.5, z + 4.0, 5, 0.15, 0.15, '#263a58', '#1a2e48', '#1e3250', camX, camY, scale);
+  drawIsoBox(x + 5.5, y, z + 1.0, 3.5, 0.6, 0.2, '#223050', '#182640', '#1c2c48', camX, camY, scale);
+  drawIsoBox(x + 6.5, y, z + 0.3, 0.3, 0.3, 0.7, '#1e2e4e', '#141e38', '#182440', camX, camY, scale);
+  drawIsoBox(x - 4.2, y, z + 0.3, 0.3, 0.8, 2.0, '#253858', '#1a2a45', '#1e3050', camX, camY, scale);
+}
+
+// ——— Tailings dam ———
+function drawTailingsDam(x, y, z, camX, camY, scale) {
+  drawIsoBox(x, y, z, 12, 2.5, 0.8, '#1e2e50', '#152040', '#1a2648', camX, camY, scale);
+  drawIsoBox(x, y, z + 0.8, 11, 2.0, 0.7, '#1a2848', '#122038', '#162440', camX, camY, scale);
+  drawIsoBox(x, y, z + 1.5, 11.5, 1.5, 0.1, '#222e4a', '#181f35', '#1c2540', camX, camY, scale);
+  drawIsoPlane(x, y + 4.5, z + 0.4, 11, 6, 'rgba(25,50,90,0.45)', camX, camY, scale);
+  drawIsoPlane(x - 1, y + 4, z + 0.42, 3, 2, 'rgba(35,65,110,0.2)', camX, camY, scale);
+  drawIsoBox(x, y + 8, z, 12, 2, 0.8, '#1a2848', '#122038', '#162440', camX, camY, scale);
+  drawIsoBox(x, y + 8, z + 0.8, 11, 1.5, 0.5, '#1e2e50', '#152040', '#1a2648', camX, camY, scale);
+  drawIsoBox(x - 3, y + 1.5, z + 1.2, 0.15, 2, 0.15, '#283e5e', '#1e3048', '#223452', camX, camY, scale);
+  drawIsoBox(x + 3, y + 1.5, z + 1.2, 0.15, 2, 0.15, '#283e5e', '#1e3048', '#223452', camX, camY, scale);
+  drawIsoBox(x + 6, y - 0.5, z, 0.4, 0.4, 3.0, '#253858', '#1a2a45', '#1e3050', camX, camY, scale);
+  drawIsoBox(x + 6, y - 0.5, z + 3.0, 0.8, 0.8, 0.5, '#2e4468', '#203352', '#253858', camX, camY, scale);
+}
+
+function drawSmallBox(x, y, z, w, d, h, opacity, camX, camY, scale) {
+  const a = opacity;
+  drawIsoBox(x, y, z, w, d, h,
+    `rgba(35,52,80,${a})`,
+    `rgba(22,36,58,${a})`,
+    `rgba(28,42,65,${a})`,
+    camX, camY, scale);
+}
+
+// ——— Mining Haul Road System — smooth continuous Catmull-Rom roads with fade ———
+
+// Catmull-Rom spline interpolation for smooth curves
+function catmullRom(p0, p1, p2, p3, t) {
+  const t2 = t * t, t3 = t2 * t;
+  return {
+    x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+    y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
+    z: 0.5 * ((2 * p1.z) + (-p0.z + p2.z) * t + (2 * p0.z - 5 * p1.z + 4 * p2.z - p3.z) * t2 + (-p0.z + 3 * p1.z - 3 * p2.z + p3.z) * t3),
+  };
+}
+
+// Resample waypoints into a dense smooth polyline via Catmull-Rom
+function resampleRoad(waypoints, density) {
+  const pts = waypoints.map(w => ({ x: w.x, y: w.y, z: w.z || 0.02 }));
+  if (pts.length < 2) return pts;
+  const samplesPerSeg = density || 10;
+  const result = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)];
+    const p1 = pts[i];
+    const p2 = pts[Math.min(pts.length - 1, i + 1)];
+    const p3 = pts[Math.min(pts.length - 1, i + 2)];
+    for (let s = 0; s < samplesPerSeg; s++) {
+      result.push(catmullRom(p0, p1, p2, p3, s / samplesPerSeg));
+    }
+  }
+  result.push({ x: pts[pts.length-1].x, y: pts[pts.length-1].y, z: pts[pts.length-1].z });
+  return result;
+}
+
+// Compute cumulative arc-length array for a polyline
+function arcLengths(pts) {
+  const lens = [0];
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i].x - pts[i-1].x, dy = pts[i].y - pts[i-1].y;
+    lens.push(lens[i-1] + Math.sqrt(dx*dx + dy*dy));
+  }
+  return lens;
+}
+
+function drawHaulRoadSegment(waypoints, roadWidth, camX, camY, scale, fadeMode) {
+  if (waypoints.length < 2) return;
+
+  // Resample into smooth dense polyline
+  const smooth = resampleRoad(waypoints, 12);
+  if (smooth.length < 2) return;
+
+  const lens = arcLengths(smooth);
+  const totalLen = lens[lens.length - 1] || 1;
+
+  // Project all smooth points to screen space
+  const projected = smooth.map(p => worldToScreen(p.x, p.y, p.z, camX, camY, scale));
+
+  // Compute per-point normals (perpendicular to tangent) in screen space
+  const normals = [];
+  for (let i = 0; i < projected.length; i++) {
+    let tx, ty;
+    if (i === 0) {
+      tx = projected[1].sx - projected[0].sx;
+      ty = projected[1].sy - projected[0].sy;
+    } else if (i === projected.length - 1) {
+      tx = projected[i].sx - projected[i-1].sx;
+      ty = projected[i].sy - projected[i-1].sy;
+    } else {
+      tx = projected[i+1].sx - projected[i-1].sx;
+      ty = projected[i+1].sy - projected[i-1].sy;
+    }
+    const tLen = Math.sqrt(tx*tx + ty*ty) || 1;
+    normals.push({ nx: -ty / tLen, ny: tx / tLen });
+  }
+
+  // Build left and right edge polylines with per-point fade
+  const fadeZone = 0.22;
+
+  for (let i = 0; i < projected.length - 1; i++) {
+    const t0 = lens[i] / totalLen;
+    const t1 = lens[i+1] / totalLen;
+
+    // Compute alpha for this mini-segment
+    let a0 = 1, a1 = 1;
+    for (const t of [{ ref: t0, out: 'a0' }, { ref: t1, out: 'a1' }]) {
+      let a = 1;
+      if (fadeMode === 'both' || fadeMode === 'end') {
+        if (t.ref > 1 - fadeZone) a = Math.min(a, (1 - t.ref) / fadeZone);
+      }
+      if (fadeMode === 'both' || fadeMode === 'start') {
+        if (t.ref < fadeZone) a = Math.min(a, t.ref / fadeZone);
+      }
+      if (t.out === 'a0') a0 = Math.max(0, a); else a1 = Math.max(0, a);
+    }
+
+    const aMid = (a0 + a1) / 2;
+    if (aMid < 0.01) continue;
+
+    const halfW = roadWidth * scale * 0.5;
+    const shoulderHalfW = halfW * 1.45;
+
+    const p0 = projected[i], p1 = projected[i+1];
+    const n0 = normals[i], n1 = normals[i+1];
+
+    // Shoulder (wider, very faint ground blend)
+    const shoulderAlpha = 0.10 * aMid;
+    ctx.fillStyle = `rgba(16,28,50,${shoulderAlpha.toFixed(3)})`;
+    ctx.beginPath();
+    ctx.moveTo(p0.sx + n0.nx * shoulderHalfW, p0.sy + n0.ny * shoulderHalfW);
+    ctx.lineTo(p1.sx + n1.nx * shoulderHalfW, p1.sy + n1.ny * shoulderHalfW);
+    ctx.lineTo(p1.sx - n1.nx * shoulderHalfW, p1.sy - n1.ny * shoulderHalfW);
+    ctx.lineTo(p0.sx - n0.nx * shoulderHalfW, p0.sy - n0.ny * shoulderHalfW);
+    ctx.closePath();
+    ctx.fill();
+
+    // Road surface
+    const roadAlpha = 0.38 * aMid;
+    ctx.fillStyle = `rgba(20,33,58,${roadAlpha.toFixed(3)})`;
+    ctx.beginPath();
+    ctx.moveTo(p0.sx + n0.nx * halfW, p0.sy + n0.ny * halfW);
+    ctx.lineTo(p1.sx + n1.nx * halfW, p1.sy + n1.ny * halfW);
+    ctx.lineTo(p1.sx - n1.nx * halfW, p1.sy - n1.ny * halfW);
+    ctx.lineTo(p0.sx - n0.nx * halfW, p0.sy - n0.ny * halfW);
+    ctx.closePath();
+    ctx.fill();
+
+    // Edge lines — very faint
+    if (aMid > 0.12) {
+      const edgeAlpha = 0.07 * aMid;
+      ctx.strokeStyle = `rgba(50,75,115,${edgeAlpha.toFixed(3)})`;
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(p0.sx + n0.nx * halfW * 0.92, p0.sy + n0.ny * halfW * 0.92);
+      ctx.lineTo(p1.sx + n1.nx * halfW * 0.92, p1.sy + n1.ny * halfW * 0.92);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(p0.sx - n0.nx * halfW * 0.92, p0.sy - n0.ny * halfW * 0.92);
+      ctx.lineTo(p1.sx - n1.nx * halfW * 0.92, p1.sy - n1.ny * halfW * 0.92);
+      ctx.stroke();
+    }
+  }
+
+  // Subtle center dashes — spaced, not continuous
+  ctx.save();
+  let dashAccum = 0;
+  for (let i = 0; i < projected.length - 1; i++) {
+    const dx = projected[i+1].sx - projected[i].sx;
+    const dy = projected[i+1].sy - projected[i].sy;
+    const segScreenLen = Math.sqrt(dx*dx + dy*dy);
+    dashAccum += segScreenLen;
+    const t = lens[i] / totalLen;
+    let a = 1;
+    if (fadeMode === 'both' || fadeMode === 'end') { if (t > 1 - fadeZone) a = Math.min(a, (1 - t) / fadeZone); }
+    if (fadeMode === 'both' || fadeMode === 'start') { if (t < fadeZone) a = Math.min(a, t / fadeZone); }
+    a = Math.max(0, a);
+    // Draw a dash every ~18px
+    if (dashAccum > 18 && a > 0.1) {
+      dashAccum = 0;
+      const markAlpha = 0.08 * a;
+      ctx.strokeStyle = `rgba(55,80,120,${markAlpha.toFixed(3)})`;
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(projected[i].sx, projected[i].sy);
+      ctx.lineTo(projected[i+1].sx, projected[i+1].sy);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+// Animated truck dot traveling along a smooth road
+function drawRoadFlowDot(waypoints, camX, camY, scale, time, speed) {
+  const smooth = resampleRoad(waypoints, 12);
+  if (smooth.length < 2) return;
+  const lens = arcLengths(smooth);
+  const totalLen = lens[lens.length - 1] || 1;
+
+  const t = ((time * (speed || 0.12)) % 1);
+  const target = t * totalLen;
+
+  // Find the segment
+  for (let i = 0; i < smooth.length - 1; i++) {
+    if (target >= lens[i] && target <= lens[i+1]) {
+      const segLen = lens[i+1] - lens[i] || 1;
+      const lt = (target - lens[i]) / segLen;
+      const fx = smooth[i].x + (smooth[i+1].x - smooth[i].x) * lt;
+      const fy = smooth[i].y + (smooth[i+1].y - smooth[i].y) * lt;
+      const fz = smooth[i].z + (smooth[i+1].z - smooth[i].z) * lt;
+      const fp = worldToScreen(fx, fy, fz + 0.05, camX, camY, scale);
+
+      // Fade dot near ends
+      const tNorm = target / totalLen;
+      let dotAlpha = 1;
+      if (tNorm < 0.15) dotAlpha = tNorm / 0.15;
+      if (tNorm > 0.85) dotAlpha = (1 - tNorm) / 0.15;
+      dotAlpha = Math.max(0, Math.min(1, dotAlpha));
+
+      // Subtle glow
+      const glowR = 5 * scale / WORLD_SCALE;
+      const grad = ctx.createRadialGradient(fp.sx, fp.sy, 0, fp.sx, fp.sy, glowR);
+      grad.addColorStop(0, `rgba(70,120,200,${(0.18 * dotAlpha).toFixed(3)})`);
+      grad.addColorStop(1, 'rgba(70,120,200,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(fp.sx, fp.sy, glowR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Core dot
+      ctx.fillStyle = `rgba(90,140,220,${(0.30 * dotAlpha).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(fp.sx, fp.sy, 1.8 * scale / WORLD_SCALE, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+  }
+}
+
+function drawGroundBlend(cx, cy, w, d, camX, camY, scale) {
+  drawIsoPlane(cx, cy, 0.005, w, d, 'rgba(18,30,52,0.12)', camX, camY, scale);
+}
+
+function drawTerrainPatch(x, y, w, d, col, camX, camY, scale) {
+  drawIsoPlane(x, y, 0, w, d, col, camX, camY, scale);
+}
+
+const WORLD_SCALE = 25;
+
+// Smooth ease-in-out for natural motion
+function easeInOut(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+// ——— Payload animation cycle — fast up-down motion ———
+function updatePayloadCycle(dt) {
+  if (!payloadFocused) return;
+  if (payloadTransition < 0.95) return;
+
+  payloadCycleTimer += dt;
+
+  switch (payloadCyclePhase) {
+    case 'idle':
+      // Short pause before next scoop
+      if (payloadCycleTimer > 0.4) {
+        payloadCyclePhase = 'scooping';
+        payloadCycleTimer = 0;
+        bucketAnimPhase = 0;
+      }
+      break;
+
+    case 'scooping':
+      // Fast raise — 1.2 seconds
+      {
+        const raw = Math.min(1, payloadCycleTimer / 1.2);
+        bucketAnimPhase = easeInOut(raw);
+      }
+      if (payloadCycleTimer >= 1.2) {
+        payloadCyclePhase = 'dumping';
+        payloadCycleTimer = 0;
+      }
+      break;
+
+    case 'dumping':
+      // Brief hold + dump
+      bucketAnimPhase = 1;
+      if (payloadCycleTimer > 0.5) {
+        payloadPass++;
+        const bucketWeight = 18 + Math.random() * 6;
+        payloadLoadProgress = Math.min(1, payloadLoadProgress + bucketWeight / 220);
+        payloadCyclePhase = 'returning';
+        payloadCycleTimer = 0;
+      }
+      break;
+
+    case 'returning':
+      // Fast descent — 1.0 seconds
+      {
+        const raw = Math.min(1, payloadCycleTimer / 1.0);
+        bucketAnimPhase = 1 - easeInOut(raw);
+      }
+      if (payloadCycleTimer >= 1.0) {
+        bucketAnimPhase = 0;
+        if (payloadLoadProgress >= 0.95) {
+          payloadCyclePhase = 'complete';
+          payloadCycleTimer = 0;
+          payloadLoadProgress = 1;
+        } else {
+          payloadCyclePhase = 'idle';
+          payloadCycleTimer = 0;
+        }
+      }
+      break;
+
+    case 'complete':
+      if (payloadCycleTimer > 3.0) {
+        payloadLoadProgress = 0;
+        payloadPass = 0;
+        payloadCyclePhase = 'idle';
+        payloadCycleTimer = 0;
+      }
+      break;
+  }
+
+  // UI data updates
+  const bucketW = (payloadCyclePhase === 'scooping' || payloadCyclePhase === 'holding' || payloadCyclePhase === 'dumping')
+    ? (18 + Math.sin(payloadCycleTimer * 1.5) * 3).toFixed(1) : '0.0';
+  const truckLoad = (payloadLoadProgress * 220).toFixed(1);
+
+  document.getElementById('po-bucket').textContent = bucketW + ' t';
+  document.getElementById('po-truck').textContent = truckLoad + ' / 220 t';
+  document.getElementById('po-bar').style.width = (payloadLoadProgress * 100) + '%';
+  document.getElementById('po-pass').textContent = payloadPass > 0 ? payloadPass + ' / ~10' : '—';
+
+  if (payloadCyclePhase === 'complete') {
+    document.getElementById('po-status').textContent = 'Truck at capacity — cycle complete';
+    document.getElementById('po-bar').style.background = '#4adf8a';
+  } else if (payloadPass > 0) {
+    document.getElementById('po-status').textContent = 'Loading in progress';
+    document.getElementById('po-bar').style.background = 'var(--accent)';
+  } else {
+    document.getElementById('po-status').textContent = 'Awaiting load cycle';
+    document.getElementById('po-bar').style.background = 'var(--accent)';
+  }
+}
+
+// ——— Main render ———
+let lastTime = performance.now();
+
+function render(now) {
+  const dt = Math.min(0.1, (now - lastTime) / 1000);
+  lastTime = now;
+
+  ctx.clearRect(0, 0, W, H);
+
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0b1533');
+  grad.addColorStop(1, '#091028');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Smooth mouse parallax interpolation
+  smoothMouseX += (mouseX - smoothMouseX) * Math.min(1, dt * 3);
+  smoothMouseY += (mouseY - smoothMouseY) * Math.min(1, dt * 3);
+
+  const targetTransition = payloadFocused ? 1 : 0;
+  payloadTransition += (targetTransition - payloadTransition) * (dt * 3.5);
+  if (Math.abs(payloadTransition - targetTransition) < 0.001) payloadTransition = targetTransition;
+
+  updatePayloadCycle(dt);
+
+  const payloadOverlay = document.getElementById('payload-overlay');
+  if (payloadTransition > 0.8) {
+    payloadOverlay.classList.add('visible');
+  } else {
+    payloadOverlay.classList.remove('visible');
+  }
+
+  const zonePositions = [
+    { x: 2, y: 15 },
+    { x: 1, y: 35 },
+    { x: 0, y: 70 },
+    { x: -1, y: 105 },
+  ];
+
+  const zoneIdx = scrollProgress * 4;
+  const zi = Math.min(3, Math.floor(zoneIdx));
+  const zf = zoneIdx - zi;
+  const nextZi = Math.min(3, zi + 1);
+
+  const camWorldX = zonePositions[zi].x + (zonePositions[nextZi].x - zonePositions[zi].x) * zf;
+  const camWorldY = zonePositions[zi].y + (zonePositions[nextZi].y - zonePositions[zi].y) * zf;
+
+  const focusWorldX = 0;
+  const focusWorldY = 14;
+
+  const effectiveCamWorldX = camWorldX + (focusWorldX - camWorldX) * payloadTransition;
+  const effectiveCamWorldY = camWorldY + (focusWorldY - camWorldY) * payloadTransition;
+
+  const camIso = isoProject(effectiveCamWorldX, effectiveCamWorldY, 0);
+  const mouseParallaxStrength = 1.8;
+  const camX = camIso.sx + smoothMouseX * mouseParallaxStrength;
+  const camY = camIso.sy + smoothMouseY * mouseParallaxStrength;
+
+  const baseScale = WORLD_SCALE;
+  const focusScale = baseScale * 1.15;
+  const scale = baseScale + (focusScale - baseScale) * payloadTransition;
+
+  if (payloadTransition > 0.3) {
+    const overlayPos = worldToScreen(6, 14, 1, camX, camY, scale);
+    payloadOverlay.style.left = Math.min(W - 220, overlayPos.sx + 10) + 'px';
+    payloadOverlay.style.top = Math.max(100, overlayPos.sy - 30) + 'px';
+  }
+
+  // ——— Grid ———
+  ctx.save();
+  ctx.globalAlpha = 0.10;
+  ctx.strokeStyle = '#5070a0';
+  ctx.lineWidth = 0.5;
+  for (let gy = -30; gy <= 140; gy += 4) {
+    const p1 = worldToScreen(-50, gy, 0, camX, camY, scale);
+    const p2 = worldToScreen(50, gy, 0, camX, camY, scale);
+    ctx.beginPath(); ctx.moveTo(p1.sx, p1.sy); ctx.lineTo(p2.sx, p2.sy); ctx.stroke();
+  }
+  for (let gx = -50; gx <= 50; gx += 4) {
+    const p1 = worldToScreen(gx, -30, 0, camX, camY, scale);
+    const p2 = worldToScreen(gx, 140, 0, camX, camY, scale);
+    ctx.beginPath(); ctx.moveTo(p1.sx, p1.sy); ctx.lineTo(p2.sx, p2.sy); ctx.stroke();
+  }
+  ctx.restore();
+
+  // ——— MINING HAUL ROAD CONNECTIONS ———
+  const flowTime = now / 1000;
+
+  // Subtle ground blends at connection zones
+  drawGroundBlend(3, 25, 8, 18, camX, camY, scale);
+  drawGroundBlend(3, 55, 8, 18, camX, camY, scale);
+  drawGroundBlend(3, 88, 8, 18, camX, camY, scale);
+
+  // Road from Extraction exit to Comminution — main haul road
+  const road1 = [
+    { x: 8, y: 16, z: 0.02 },
+    { x: 9.5, y: 19, z: 0.02 },
+    { x: 8.5, y: 22, z: 0.02 },
+    { x: 6, y: 25, z: 0.02 },
+    { x: 4.5, y: 28, z: 0.02 },
+    { x: 3.5, y: 31, z: 0.02 },
+    { x: 3.8, y: 34, z: 0.02 },
+    { x: 4, y: 37, z: 0.02 },
+    { x: 3, y: 40, z: 0.02 },
+  ];
+  drawHaulRoadSegment(road1, 2.2, camX, camY, scale, 'both');
+  drawRoadFlowDot(road1, camX, camY, scale, flowTime, 0.10);
+
+  // Road from Comminution to Processing
+  const road2 = [
+    { x: 3, y: 46, z: 0.02 },
+    { x: 4, y: 50, z: 0.02 },
+    { x: 5, y: 54, z: 0.02 },
+    { x: 4, y: 57, z: 0.02 },
+    { x: 3, y: 60, z: 0.02 },
+    { x: 2.5, y: 63, z: 0.02 },
+    { x: 3, y: 67, z: 0.02 },
+    { x: 3, y: 70, z: 0.02 },
+  ];
+  drawHaulRoadSegment(road2, 2.0, camX, camY, scale, 'both');
+  drawRoadFlowDot(road2, camX, camY, scale, flowTime + 1.5, 0.10);
+
+  // Road from Processing to Tailings
+  const road3 = [
+    { x: 3, y: 78, z: 0.02 },
+    { x: 2, y: 82, z: 0.02 },
+    { x: 1, y: 86, z: 0.02 },
+    { x: 0.8, y: 90, z: 0.02 },
+    { x: 1.5, y: 94, z: 0.02 },
+    { x: 2, y: 97, z: 0.02 },
+  ];
+  drawHaulRoadSegment(road3, 1.8, camX, camY, scale, 'both');
+  drawRoadFlowDot(road3, camX, camY, scale, flowTime + 3.0, 0.10);
+
+  // Spur roads — small service roads branching off zones (subtle)
+  const spur1 = [
+    { x: -6, y: 10, z: 0.02 },
+    { x: -10, y: 9.5, z: 0.02 },
+    { x: -15, y: 8.5, z: 0.02 },
+    { x: -20, y: 8.5, z: 0.02 },
+  ];
+  drawHaulRoadSegment(spur1, 1.3, camX, camY, scale, 'end');
+
+  const spur2 = [
+    { x: 8, y: 6, z: 0.02 },
+    { x: 11, y: 2, z: 0.02 },
+    { x: 13, y: -2, z: 0.02 },
+    { x: 14, y: -7, z: 0.02 },
+  ];
+  drawHaulRoadSegment(spur2, 1.2, camX, camY, scale, 'end');
+
+  // ——— ZONE 0: EXTRACTION — Open Pit Mine ———
+  drawOpenPitMine(0, 10, camX, camY, scale, flowTime);
+
+  // Excavator at pit floor
+  const pitFloorZ = -3.5;
+  drawExcavator(-1.5, 10.5, pitFloorZ, camX, camY, scale, payloadFocused ? bucketAnimPhase : 0);
+
+  // Truck being loaded at pit floor
+  drawTruck(2.5, 11, pitFloorZ, camX, camY, scale, payloadFocused ? payloadLoadProgress : 0.3);
+
+  // Gentle material cascade when dumping — soft, not explosive
+  if (payloadFocused && payloadCyclePhase === 'dumping') {
+    const dumpT = payloadCycleTimer / 0.9; // normalised 0→1 over dump phase
+    const particleCount = Math.floor(3 + dumpT * 4);
+    for (let i = 0; i < particleCount; i++) {
+      const seed = i * 73.17;
+      const spread = 0.3 + dumpT * 0.5;
+      const px = 1.8 + Math.sin(seed) * spread + 1.2;
+      const py = 10.5 + Math.cos(seed) * spread * 0.6;
+      const fallProgress = Math.min(1, (dumpT * 1.2 + i * 0.08));
+      const pz = pitFloorZ + 3.2 - fallProgress * 2.0;
+      if (pz > pitFloorZ + 0.3) {
+        const pp = worldToScreen(px, py, pz, camX, camY, scale);
+        const alpha = (0.18 + Math.sin(seed * 2) * 0.08) * (1 - fallProgress * 0.6);
+        ctx.fillStyle = `rgba(110,95,65,${alpha.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(pp.sx, pp.sy, 1.2 + Math.sin(seed * 3) * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // ——— ZONE 1: COMMINUTION ———
+  drawTerrainPatch(0, 42, 16, 10, 'rgba(16,28,50,0.35)', camX, camY, scale);
+  drawCrusher(3, 42, 0, camX, camY, scale);
+
+  drawSmallBox(-6, 38, 0, 3, 3, 1.2, 0.3, camX, camY, scale);
+  drawSmallBox(-5.5, 38.5, 1.2, 2, 2, 0.6, 0.25, camX, camY, scale);
+
+  for (let ci = 0; ci < 4; ci++) {
+    drawSmallBox(8 + ci * 2, 42, 0, 0.3, 0.3, 1.5, 0.2, camX, camY, scale);
+  }
+
+  drawSmallBox(-10, 45, 0, 1.5, 1, 0.5, 0.2, camX, camY, scale);
+  drawSmallBox(15, 40, 0, 2, 1.5, 0.4, 0.2, camX, camY, scale);
+  drawSmallBox(13, 48, 0, 1, 1, 0.3, 0.15, camX, camY, scale);
+  drawSmallBox(-8, 50, 0, 1, 1.5, 0.4, 0.18, camX, camY, scale);
+
+  // ——— ZONE 2: PROCESSING ———
+  drawTerrainPatch(2, 72, 18, 12, 'rgba(16,28,50,0.3)', camX, camY, scale);
+  drawProcessingPlant(3, 72, 0, camX, camY, scale);
+
+  drawSmallBox(10, 68, 0, 0.3, 8, 0.3, 0.2, camX, camY, scale);
+  drawSmallBox(-5, 75, 0, 5, 0.3, 0.3, 0.2, camX, camY, scale);
+
+  drawSmallBox(-10, 70, 0, 2, 2, 0.6, 0.2, camX, camY, scale);
+  drawSmallBox(-12, 76, 0, 1.5, 1, 0.4, 0.15, camX, camY, scale);
+  drawSmallBox(14, 72, 0, 1, 1, 0.3, 0.18, camX, camY, scale);
+  drawSmallBox(16, 68, 0, 1.5, 1.5, 0.5, 0.15, camX, camY, scale);
+  drawSmallBox(-8, 82, 0, 1, 1, 0.3, 0.12, camX, camY, scale);
+
+  // ——— ZONE 3: TAILINGS ———
+  drawTerrainPatch(0, 102, 20, 14, 'rgba(14,24,45,0.3)', camX, camY, scale);
+  drawTailingsDam(2, 100, 0, camX, camY, scale);
+
+  drawSmallBox(-5, 95, 0, 8, 0.3, 0.3, 0.2, camX, camY, scale);
+  drawSmallBox(-12, 98, 0, 2, 1.5, 0.4, 0.15, camX, camY, scale);
+  drawSmallBox(15, 102, 0, 1.5, 1, 0.3, 0.12, camX, camY, scale);
+  drawSmallBox(-10, 108, 0, 1, 1, 0.3, 0.1, camX, camY, scale);
+  drawSmallBox(14, 110, 0, 1, 1.5, 0.4, 0.12, camX, camY, scale);
+
+  // ——— Update hotspot positions ———
+  updateHotspots(camX, camY, scale);
+
+  requestAnimationFrame(render);
+}
+
+function updateHotspots(camX, camY, scale) {
+  const pitFloorZ = -3.5;
+  const hotspotData = [
+    { id: 'hs-payload',  wx: 2.5,  wy: 11,  wz: pitFloorZ + 4.5 },
+    { id: 'hs-frag',     wx: -14,  wy: -1,  wz: 2.5 },
+    { id: 'hs-digging',  wx: -1.5, wy: 10.5,wz: pitFloorZ + 5 },
+    { id: 'hs-material', wx: 8,    wy: 10,  wz: 2 },
+    { id: 'hs-site',     wx: 14,   wy: -8,  wz: 2.5 },
+  ];
+
+  hotspotData.forEach(h => {
+    const pos = worldToScreen(h.wx, h.wy, h.wz, camX, camY, scale);
+    const el = document.getElementById(h.id);
+    el.style.left = pos.sx + 'px';
+    el.style.top = pos.sy + 'px';
+  });
+}
+
+updateScroll();
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
